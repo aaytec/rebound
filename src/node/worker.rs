@@ -2,7 +2,8 @@ use flume::Receiver;
 use log::info;
 use tiny_http::{Request, Response};
 
-use crate::conf::ReboundConf;
+use crate::conf::{ReboundConf, ReboundRule};
+use crate::engine::ReboundEngine;
 
 ///
 /// 
@@ -14,11 +15,11 @@ pub struct WorkerNode {
 
     ///
     /// 
-    pub conf: ReboundConf,
-    
+    request_queue_rx: Receiver<Request>,
+
     ///
     /// 
-    request_queue_rx: Receiver<Request>
+    engine: ReboundEngine
 }
 
 ///
@@ -26,15 +27,19 @@ pub struct WorkerNode {
 impl WorkerNode {
 
     pub fn from(wid: String, c: ReboundConf, receiver: Receiver<Request>) -> Self {
-        WorkerNode { id: wid, conf: c, request_queue_rx: receiver }
+        WorkerNode { 
+            id: wid,
+            request_queue_rx: receiver,
+            engine: ReboundEngine::new(c.rules.unwrap_or_else(|| Vec::new()))
+        }
     }
 
-    pub fn run(&self) {
+    pub fn run(&mut self) {
 
-        for req in self.request_queue_rx.iter() {
+        for mut req in self.request_queue_rx.iter() {
 
             info!("{} handling request: {:?}", self.id, req);
-            req.respond(Response::from_string("success")).unwrap();
+            self.engine.rebound(req);
         }
     }
 }

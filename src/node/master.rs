@@ -42,7 +42,7 @@ impl MasterNode {
         info!("Starting master...");
 
         let (tx, rx) = flume::unbounded::<Request>();
-        let wc = conf.workers.unwrap_or_else(|| REBOUND_DEFAULT_WORKER_COUNT);        
+        let wc = conf.workers;        
         let workers = (0..wc)
             .map(|n| WorkerNode::from( String::from(format!("worker-{}", n+1)), conf.clone(), rx.clone()))
             .collect();
@@ -79,7 +79,7 @@ impl MasterNode {
     pub fn run(self) {
         
         let mut worker_handles: Vec<JoinHandle<()>> = Vec::new();
-        for w in self.workers {
+        for mut w in self.workers {
 
             info!("Starting {}", w.id);
             let handle: JoinHandle<()> = thread::spawn(move || {

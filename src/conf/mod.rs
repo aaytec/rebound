@@ -11,9 +11,13 @@ pub const REBOUND_LOG_FILE: &'static str = "REBOUND_LOG_FILE";
 /// 
 pub const REBOUND_CONF_FILE: &'static str = "REBOUND_CONF_FILE";
 
+/// Rebound Conf File
+/// 
+pub const REBOUND_SITE_DIR: &'static str = "REBOUND_SITE_DIR";
+
 /// Default Number of workers for Rebound Server
 /// 
-pub const REBOUND_DEFAULT_WORKER_COUNT: usize = 3;
+pub const REBOUND_DEFAULT_WORKER_COUNT: usize = 10;
 
 /// Configuration for Rebound Server
 ///
@@ -34,13 +38,16 @@ pub struct ReboundConf {
 
     /// Rebound worker count
     /// 
-    pub workers: Option<usize>,
+    #[serde(default = "workers_default")]
+    pub workers: usize,
 
     /// Rebound Rules
     /// 
     pub rules: Option<Vec<ReboundRule>>
 
 }
+
+fn workers_default() -> usize {REBOUND_DEFAULT_WORKER_COUNT}
 
 
 /// SSL configuration for Rebound
@@ -70,22 +77,35 @@ pub struct ReboundRule {
 
     /// preserve URI path
     /// defaults = true
+    #[serde(default = "preserve_path_default")]
     pub preserve_path: bool,
 
     /// preserve Http Headers
     /// defaults = true
+    #[serde(default = "preserve_hdrs_default")]
     pub preserve_hdrs: bool,
 
     /// Set Additional Http Headers
-    /// defaults = true
-    pub additional_hdrs: Option<HashMap<String, String>>,
+    /// 
+    #[serde(default)]
+    pub additional_hdrs: HashMap<String, String>,
 
     /// preserve Http Query Params
     /// defaults = true
-    pub preserve_params: bool,
+    #[serde(default = "preserve_query_default")]
+    pub preserve_query: bool,
+
+    /// Set Additional Http Query Params
+    ///
+    #[serde(default)]
+    pub additional_query: HashMap<String, String>,
 
     ///
     /// 
-    pub proxy: String
+    pub redirect: String
 
 }
+
+fn preserve_path_default() -> bool {true}
+fn preserve_hdrs_default() -> bool {true}
+fn preserve_query_default() -> bool {true}
