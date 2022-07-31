@@ -1,8 +1,10 @@
+
 use flume::Receiver;
 use log::info;
-use tiny_http::{Request, Response};
+use tiny_http::Request;
+use futures::executor;
 
-use crate::conf::{ReboundConf, ReboundRule};
+use crate::conf::ReboundConf;
 use crate::engine::ReboundEngine;
 
 ///
@@ -39,7 +41,7 @@ impl WorkerNode {
         for mut req in self.request_queue_rx.iter() {
 
             info!("{} handling request: {:?}", self.id, req);
-            self.engine.rebound(req);
+            executor::block_on(self.engine.rebound(req));
         }
     }
 }

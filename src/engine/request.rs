@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 use regex::Regex;
 use tiny_http::{Header, Method, Request};
@@ -38,7 +38,9 @@ pub enum ReboundRequestType {
 #[derive(serde::Serialize, Debug)]
 pub struct ReboundRequest {
 
-    pub path_uri: String,
+
+
+    pub uri: String,
     
     pub headers: HashMap<String, String>,
 
@@ -109,7 +111,7 @@ impl ReboundIngressRequestBuilder {
     pub fn build(&self) -> ReboundRequest {
         
         ReboundRequest { 
-            path_uri: self.build_uri(),
+            uri: self.build_uri(),
             headers: self.build_hdrs(),
             query_params: self.build_query_params(), 
             method: self.build_method(),
@@ -172,7 +174,15 @@ impl ReboundIngressRequestBuilder {
                     x.clone()
                 }
             })
-            .map(|x| if self.rule.preserve_path { x } else { String::default() })
+            .map(|x| {
+                let path = if self.rule.preserve_path {
+                    x
+                } else {
+                     String::default()
+                };
+                
+                format!("{}{}", self.rule.redirect, path)
+            })
             .unwrap_or_default()
     }
 

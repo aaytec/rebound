@@ -1,30 +1,41 @@
+use std::error::Error;
+
+use surf::{Url, http::{headers::CONTENT_TYPE}, Response};
+
 use super::request::{ReboundRequest, ReboundRequestType};
 
 
 
-pub struct ReboundClient {}
+pub struct ReboundClient {
+    client: surf::Client
+}
 
 impl ReboundClient {
 
     pub fn new() -> Self {
-        ReboundClient { }
+        ReboundClient { client: surf::client() }
     }
 
 
-    pub async fn send(&self, req: ReboundRequest) -> () {
-        // let mut redirect_builder = surf::Request::builder(get_redirect_method(&ingress_req.method), Url::parse(format!("{}{}", rule.redirect, ingress_req.path_uri).as_str()).unwrap());
-        // if let Some(body) = &ingress_req.body {
-        //     redirect_builder.body_string(body.to_string());
-        // }
+    pub async fn send(&self, req: ReboundRequest) -> Result<Response, Box<dyn Error>> {
+        let mut redirect_req = surf::Request
+            ::builder(get_redirect_method(&req), get_url_with_params(&req))
+            .body_string(req.body.unwrap_or_default())
+            .build();
 
-        // for (k, v) in &ingress_req.headers {
-        //     redirect_builder.header(k.as_str(), v.as_str());
-        // }
+        redirect_req.remove_header(CONTENT_TYPE);
+
+        for (k, v) in &req.headers {
+            redirect_req.set_header(k.as_str(), v.as_str());
+        }
+        
+        let res = self.client.send(redirect_req).await?;
+        Ok(res)
     }
 }
 
-fn get_redirect_method(method: &ReboundRequestType) -> surf::http::Method {
-    match method {
+fn get_redirect_method(req: &ReboundRequest) -> surf::http::Method {
+    match req.method {
         ReboundRequestType::Get => surf::http::Method::Get,
         ReboundRequestType::Post => surf::http::Method::Post,
         ReboundRequestType::Patch => surf::http::Method::Patch,
@@ -36,4 +47,13 @@ fn get_redirect_method(method: &ReboundRequestType) -> surf::http::Method {
         ReboundRequestType::Options => surf::http::Method::Options,
         ReboundRequestType::Invalid => panic!(),
     }
+}
+
+fn get_url_with_params(req: &ReboundRequest) -> Url {
+    Url
+        ::parse_with_params(
+            req.uri.as_str(),
+            req.query_params.iter().map(|(k, v)| -> (String, String) { (k.to_string(), v.to_string()) })
+        )
+        .unwrap()
 }
