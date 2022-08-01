@@ -3,7 +3,7 @@ use flume::{Sender, Receiver};
 use log::{info, error};
 use tiny_http::{Server, SslConfig, Request};
 
-use crate::conf::{ReboundConf, REBOUND_DEFAULT_WORKER_COUNT, parser::read_ssl_file};
+use crate::conf::{ReboundConf, parser::read_ssl_file};
 
 use super::worker::WorkerNode;
 

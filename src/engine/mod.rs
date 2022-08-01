@@ -1,49 +1,39 @@
-mod client;
-mod request;
+pub mod client;
+pub mod request;
+pub mod response;
+use regex::Regex;
 
-use std::fs::File;
-
-use log::info;
-use tiny_http::{Request, Response, StatusCode};
-use crate::conf::{ReboundRule, REBOUND_SITE_DIR};
-
-use self::{client::ReboundClient, request::{ReboundIngressRequestBuilder, match_rule}};
+use crate::conf::ReboundRule;
+use self::request::ReboundRequest;
 
 pub struct ReboundEngine {
 
-    rules: Vec<ReboundRule>,
-
-    pub client: ReboundClient
+    rules: Vec<ReboundRule>
 
 }
 
 impl ReboundEngine {
 
     pub fn new(rules: Vec<ReboundRule>) -> Self {
-        ReboundEngine { rules: rules, client: ReboundClient::new() }
+        ReboundEngine { rules: rules }
     }
 
-    pub async fn rebound(&mut self, mut req: Request) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn get(&mut self, req: impl Into<ReboundRequest>) -> Option<ReboundRequest> {
 
-        if let Some(rule) = match_rule(self.rules.as_mut_slice(), req.url().to_string())  {
+        let req: ReboundRequest = req.into();
+           
+        let rules_to_apply: Vec<ReboundRule> = self.rules
+            .iter_mut()
+            .filter(|r|  {
+                let re = Regex::new(r.pattern.as_str()).unwrap();
+                re.is_match(&req.uri)
+            })
+            .map(|r| r.clone())
+            .collect();
 
-            let rebound_req = ReboundIngressRequestBuilder::new(&rule)
-                    .with_url(req.url().to_string())
-                    .with_headers(req.headers())
-                    .with_method(req.method())
-                    .with_body(&mut req)
-                    .build();
-
-            info!("Redirect Request: {:?}", rebound_req);
-            let res = self.client.send(rebound_req).await?;
-            info!("Sending Response: {:?}", res);
-
-            req.respond(Response::from_string("200 OK\r\n\r\n"))?
+        match rules_to_apply.first() {
+            Some(rule) => Some(req.apply(rule)),
+            None => None,
         }
-        else {
-            req.respond(Response::from_file(File::open(format!("{}/default.html", std::env::var(REBOUND_SITE_DIR).unwrap())).unwrap()).with_status_code(404))?
-        }
-
-        Ok(())
     }
 }

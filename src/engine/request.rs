@@ -1,23 +1,9 @@
-use std::{collections::HashMap, fmt::format};
-
-use regex::Regex;
+use std::collections::HashMap;
 use tiny_http::{Header, Method, Request};
 
 use crate::conf::ReboundRule;
 
-pub fn match_rule(rules: &mut [ReboundRule], req_path: String) -> Option<ReboundRule> {
-
-    for rule in rules.into_iter() {
-        let re = Regex::new(rule.pattern.as_str()).unwrap();
-            if re.is_match(req_path.as_str()) {
-                return Some(rule.clone())
-            }
-    }
-
-    None
-}
-
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, Clone, Debug)]
 pub enum ReboundRequestType {
 
     Get,
@@ -35,27 +21,109 @@ pub enum ReboundRequestType {
 
 }
 
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, Clone, Debug)]
 pub struct ReboundRequest {
 
-
-
     pub uri: String,
+
+    pub method: ReboundRequestType,
     
     pub headers: HashMap<String, String>,
 
     pub query_params: HashMap<String, String>,
 
-    pub method: ReboundRequestType,
-
     pub body: Option<String>
 
 }
 
+impl ReboundRequest {
+
+
+    pub fn apply(&self, rule: &ReboundRule) -> ReboundRequest {
+
+        let mut new_req = self.clone();
+
+        if !rule.preserve_hdrs {
+            new_req.headers.clear();
+        }
+
+        for (k, v) in &rule.additional_hdrs {
+            new_req.headers.insert(k.to_string(), v.to_string());
+        }
+
+        if !rule.preserve_query {
+            new_req.query_params.clear();
+        }
+
+        for (k, v) in &rule.additional_query {
+            new_req.query_params.insert(k.to_string(), v.to_string());
+        }
+
+        let path = if rule.preserve_path {
+            new_req.uri
+        } else {
+            String::default()
+        };
+
+        new_req.uri = format!("{}{}", rule.redirect, path);
+        new_req
+    }
+}
+
+impl Into<surf::Request> for ReboundRequest {
+
+    fn into(self) -> surf::Request {
+
+        let method = match self.method {
+            ReboundRequestType::Get => surf::http::Method::Get,
+            ReboundRequestType::Post => surf::http::Method::Post,
+            ReboundRequestType::Patch => surf::http::Method::Patch,
+            ReboundRequestType::Put => surf::http::Method::Put,
+            ReboundRequestType::Delete => surf::http::Method::Delete,
+            ReboundRequestType::Head => surf::http::Method::Head,
+            ReboundRequestType::Connect => surf::http::Method::Connect,
+            ReboundRequestType::Trace => surf::http::Method::Trace,
+            ReboundRequestType::Options => surf::http::Method::Options,
+            ReboundRequestType::Invalid => panic!(),
+        };
+
+        let full_url = 
+        surf::Url
+            ::parse_with_params(
+                self.uri.as_str(),
+                    self.query_params.iter().map(|(k, v)| -> (String, String) { (k.to_string(), v.to_string()) })
+            )
+            .unwrap();
+
+        let mut redirect_req = surf::Request
+            ::builder(method, full_url)
+            .body_string(self.body.unwrap_or_default())
+            .build();
+
+        redirect_req.remove_header(surf::http::headers::CONTENT_TYPE);
+
+        self.headers.iter().for_each(|(k, v)| {
+            redirect_req.set_header(k.as_str(), v.as_str());
+        });
+
+        redirect_req
+    }
+}
+
+impl From<&mut tiny_http::Request> for ReboundRequest {
+    fn from(req: &mut tiny_http::Request) -> Self {
+        ReboundIngressRequestBuilder
+            ::new()
+            .with_method(req.method())
+            .with_headers(req.headers())
+            .with_url(req.url().to_string())
+            .with_body(req)
+            .build()
+    }
+}
+
 
 pub struct ReboundIngressRequestBuilder {
-
-    rule: ReboundRule,
 
     url: Option<String>,
 
@@ -68,10 +136,9 @@ pub struct ReboundIngressRequestBuilder {
 }
 impl ReboundIngressRequestBuilder {
 
-    pub fn new(rule: &ReboundRule) -> Self {
+    pub fn new() -> Self {
         
         ReboundIngressRequestBuilder {
-            rule: rule.clone(),
             url: None,
             headers: None,
             method: None,
@@ -123,16 +190,10 @@ impl ReboundIngressRequestBuilder {
     fn build_hdrs(&self) -> HashMap<String, String> {
 
         let mut headers: HashMap<String, String> = HashMap::new();
-        if self.rule.preserve_hdrs {
-            if let Some(hdrs) = &self.headers {
-                for hdr in hdrs.iter() {
-                    headers.insert(hdr.field.to_string(), hdr.value.to_string());
-                }
+        if let Some(hdrs) = &self.headers {
+            for hdr in hdrs.iter() {
+                headers.insert(hdr.field.to_string(), hdr.value.to_string());
             }
-        }
-
-        for (k, v) in &self.rule.additional_hdrs {
-            headers.insert(k.to_string(), v.to_string());
         }
 
         headers
@@ -174,43 +235,27 @@ impl ReboundIngressRequestBuilder {
                     x.clone()
                 }
             })
-            .map(|x| {
-                let path = if self.rule.preserve_path {
-                    x
-                } else {
-                     String::default()
-                };
-                
-                format!("{}{}", self.rule.redirect, path)
-            })
             .unwrap_or_default()
     }
 
     fn build_query_params(&self) -> HashMap<String, String> {
 
         let mut params: HashMap<String, String> = HashMap::new();
+        if let Some(url) = &self.url {
+            if let Some(index) = url.find("?") {
 
-        if self.rule.preserve_query {
-            if let Some(url) = &self.url {
-                if let Some(index) = url.find("?") {
+                if index < url.len() {
+                    let all_params = &url[index+1..url.len()];
+                    for query in all_params.split("&") {
 
-                    if(index < url.len()) {
-                        let all_params = &url[index+1..url.len()];
-                        for query in all_params.split("&") {
-
-                            let query_split: Vec<&str> = query.split("=").collect();
-                            if query_split.len() == 2 {
-                                params.insert(String::from(query_split[0]), String::from(query_split[1]));
-                            }
+                        let query_split: Vec<&str> = query.split("=").collect();
+                        if query_split.len() == 2 {
+                            params.insert(String::from(query_split[0]), String::from(query_split[1]));
                         }
                     }
-
                 }
+
             }
-        }
-        
-        for (k, v) in &self.rule.additional_query {
-            params.insert(k.to_string(), v.to_string());
         }
 
         params
