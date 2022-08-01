@@ -248,9 +248,8 @@ impl ReboundIngressRequestBuilder {
                     let all_params = &url[index+1..url.len()];
                     for query in all_params.split("&") {
 
-                        let query_split: Vec<&str> = query.split("=").collect();
-                        if query_split.len() == 2 {
-                            params.insert(String::from(query_split[0]), String::from(query_split[1]));
+                        if let Some((k, v)) = query.split_once("=") {
+                            params.insert(String::from(k), String::from(v));
                         }
                     }
                 }
