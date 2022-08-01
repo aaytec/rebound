@@ -32,7 +32,7 @@ pub struct ReboundRequest {
 
     pub query_params: HashMap<String, String>,
 
-    pub body: Option<String>
+    pub body: Option<Vec<u8>>
 
 }
 
@@ -97,7 +97,7 @@ impl Into<surf::Request> for ReboundRequest {
 
         let mut redirect_req = surf::Request
             ::builder(method, full_url)
-            .body_string(self.body.unwrap_or_default())
+            .body(self.body.unwrap_or_default())
             .build();
 
         redirect_req.remove_header(surf::http::headers::CONTENT_TYPE);
@@ -131,7 +131,7 @@ pub struct ReboundIngressRequestBuilder {
 
     method: Option<Method>,
 
-    body: Option<String>
+    body: Option<Vec<u8>>
 
 }
 impl ReboundIngressRequestBuilder {
@@ -166,10 +166,10 @@ impl ReboundIngressRequestBuilder {
 
     pub fn with_body(&mut self, req: &mut Request) -> &mut Self {
         
-        let mut content = String::new();
-        self.body = match req.as_reader().read_to_string(&mut content) {
+        let mut content = Vec::new();
+        self.body = match req.as_reader().read_to_end(&mut content) {
             Ok(_) => Some(content),
-            Err(_) => Some(String::new()),
+            Err(_) => Some(Vec::new()),
         };
 
         self
