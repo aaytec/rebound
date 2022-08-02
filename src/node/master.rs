@@ -1,9 +1,9 @@
-use std::{io::Result, thread::{self, JoinHandle}};
+use std::{io::Result, thread::{self, JoinHandle}, fs::File, env};
 use flume::{Sender, Receiver};
 use log::{info, error};
-use tiny_http::{Server, SslConfig, Request};
+use tiny_http::{Server, SslConfig, Request, Response};
 
-use crate::conf::{ReboundConf, parser::read_ssl_file};
+use crate::conf::{ReboundConf, parser::read_ssl_file, REBOUND_DEFAULT_ERROR_FILE};
 
 use super::worker::WorkerNode;
 
@@ -39,7 +39,7 @@ impl MasterNode {
     
     pub fn from(conf: &ReboundConf) -> Result<Self> {
         
-        info!("Starting master...");
+        info!("starting master...");
 
         let (tx, rx) = flume::unbounded::<Request>();
         let wc = conf.workers;        
@@ -81,9 +81,16 @@ impl MasterNode {
         let mut worker_handles: Vec<JoinHandle<()>> = Vec::new();
         for mut w in self.workers {
 
-            info!("Starting {}", w.id);
+            info!("starting {}", w.id);
             let handle: JoinHandle<()> = thread::spawn(move || {
-                w.run()
+                w
+                    .run(|| {
+                        Response
+                            ::from_file(File::open(env::var(REBOUND_DEFAULT_ERROR_FILE).unwrap()).unwrap())
+                            .with_status_code(502)
+
+                    });
+                info!("shutting down {}", w.id);
             });
 
             worker_handles.push(handle)
@@ -97,7 +104,7 @@ impl MasterNode {
 
              match self.request_queue_tx.send(req) {
                 Ok(_) =>  (),
-                Err(e) => error!("Failed to Queue Request, Error: {}", e),
+                Err(e) => error!("failed to queue request, error: {}", e),
             }
         }
 

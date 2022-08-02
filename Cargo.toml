@@ -13,7 +13,5 @@ config = "0.13.1"
 tiny_http = {version = "0.11", features = [ "ssl-openssl" ] }
 flume = "0.10.14"
 regex = "1.6.0"
-async-trait = "0.1.56"
 surf = "2.3.2"
-url = "2.2.2"
 futures = "0.3"

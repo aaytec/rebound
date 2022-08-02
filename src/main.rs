@@ -28,15 +28,17 @@ fn main() {
         Ok(f) => f,
         Err(_e) => {
             
-            error!("Rebound File not Specified in Env");
+            error!("rebound file not specified in env");
             std::process::exit(-1)
         },
     };
 
-    info!("Reading Conf: {}", conf_file);
+    info!("reading conf: {}", conf_file);
     let conf = conf::parser::parse(conf_file);
-    info!("Conf: {:?}", conf);
+    info!("conf: {:?}", conf);
     
+    info!("getting default error page");
+
     MasterNode::from(&conf)
     .unwrap()
     .run();
@@ -50,14 +52,14 @@ fn setup_logger() {
     
     let compound_policy = CompoundPolicy::new
     (
-        Box::new(SizeTrigger::new(5 * 1024 * 1024)), // 5KB as max log file size to roll
-        Box::new(FixedWindowRoller::builder().build("/tmp/rebound.{}.log", 3).unwrap())
+        Box::new(SizeTrigger::new(5*1024*1024)), // 5MB as max log file size to roll
+        Box::new(FixedWindowRoller::builder().build(format!("{}/rebound.{{}}.log", std::env::var(conf::REBOUND_LOG_DIR).unwrap()).as_str(), 3).unwrap())
     );
 
     let file_appender = RollingFileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{d} {l}::{m}{n}")))
         .build(
-            std::env::var(conf::REBOUND_LOG_FILE).unwrap(),Box::new(compound_policy))
+            format!("{}/rebound.log", std::env::var(conf::REBOUND_LOG_DIR).unwrap()),Box::new(compound_policy))
         .unwrap();
 
      let config = Config::builder()

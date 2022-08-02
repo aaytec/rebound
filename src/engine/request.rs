@@ -65,7 +65,7 @@ impl ReboundRequest {
             String::default()
         };
 
-        new_req.uri = format!("{}{}", rule.redirect, path);
+        new_req.uri = format!("{}{}", rule.upstream, path);
         new_req
     }
 }
@@ -95,18 +95,18 @@ impl Into<surf::Request> for ReboundRequest {
             )
             .unwrap();
 
-        let mut redirect_req = surf::Request
+        let mut upstream_req = surf::Request
             ::builder(method, full_url)
             .body(self.body.unwrap_or_default())
             .build();
 
-        redirect_req.remove_header(surf::http::headers::CONTENT_TYPE);
+        upstream_req.remove_header(surf::http::headers::CONTENT_TYPE);
 
         self.headers.iter().for_each(|(k, v)| {
-            redirect_req.set_header(k.as_str(), v.as_str());
+            upstream_req.set_header(k.as_str(), v.as_str());
         });
 
-        redirect_req
+        upstream_req
     }
 }
 

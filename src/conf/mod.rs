@@ -5,7 +5,7 @@ pub mod parser;
 
 /// Rebound Log File
 /// 
-pub const REBOUND_LOG_FILE: &'static str = "REBOUND_LOG_FILE";
+pub const REBOUND_LOG_DIR: &'static str = "REBOUND_LOG_DIR";
 
 /// Rebound Conf File
 /// 
@@ -13,11 +13,7 @@ pub const REBOUND_CONF_FILE: &'static str = "REBOUND_CONF_FILE";
 
 /// Rebound Conf File
 /// 
-pub const REBOUND_SITE_DIR: &'static str = "REBOUND_SITE_DIR";
-
-/// Default Number of workers for Rebound Server
-/// 
-pub const REBOUND_DEFAULT_WORKER_COUNT: usize = 10;
+pub const REBOUND_DEFAULT_ERROR_FILE: &'static str = "REBOUND_DEFAULT_ERROR_FILE";
 
 /// Configuration for Rebound Server
 ///
@@ -38,7 +34,6 @@ pub struct ReboundConf {
 
     /// Rebound worker count
     /// 
-    #[serde(default = "workers_default")]
     pub workers: usize,
 
     /// Rebound Rules
@@ -46,9 +41,6 @@ pub struct ReboundConf {
     pub rules: Option<Vec<ReboundRule>>
 
 }
-
-fn workers_default() -> usize {REBOUND_DEFAULT_WORKER_COUNT}
-
 
 /// SSL configuration for Rebound
 /// 
@@ -102,7 +94,7 @@ pub struct ReboundRule {
 
     ///
     /// 
-    pub redirect: String
+    pub upstream: String
 
 }
 
