@@ -17,6 +17,7 @@ use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 
 use node::master::MasterNode;
+use engine::circuit;
 
 fn main() {
 

@@ -1,7 +1,6 @@
 use std::error::Error;
 use super::response::ReboundResponse;
 
-
 pub struct ReboundClient {
     client: surf::Client
 }

@@ -1,6 +1,8 @@
 pub mod client;
 pub mod request;
 pub mod response;
+pub mod circuit;
+
 use regex::Regex;
 
 use crate::conf::ReboundRule;
