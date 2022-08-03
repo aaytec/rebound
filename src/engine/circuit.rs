@@ -1,9 +1,9 @@
-use std::cmp::Ordering;
-
 use crate::conf::ReboundRule;
 
-type NodeIndex = usize;
-type LinkIndex = usize;
+type NodePtr = usize;
+
+#[allow(dead_code)]
+type LinkPtr = usize;
 
 #[derive(Clone)]
 pub enum CircuitType {
@@ -18,15 +18,13 @@ pub struct CircuitNode {
     
     pub rule: Option<ReboundRule>, 
 
-    pub path: Option<CircuitPath>,
-
-    pub links: Vec<LinkIndex>
+    pub path: Option<CircuitPath>
     
 }
 
 impl CircuitNode {
     pub fn error() -> Self {
-        CircuitNode { circuit_type: CircuitType::Error, rule: None, path: None, links: Vec::new() }
+        CircuitNode { circuit_type: CircuitType::Error, rule: None, path: None }
     }
 }
 
@@ -36,42 +34,76 @@ impl From<ReboundRule> for CircuitNode {
         CircuitNode { 
             circuit_type: CircuitType::Routable,
             rule: Some(rule),
-            path: Some(CircuitPath::from(pattern)),
-            links: Vec::new()
+            path: Some(CircuitPath::from(pattern))
         }
     }
 }
 
+#[derive(Clone)]
 pub struct CircuitLink {
-    pub from: NodeIndex,
-    pub to: NodeIndex
+    pub from: NodePtr,
+    pub to: NodePtr
 }
 
+#[derive(Clone)]
 pub struct Circuit {
+    pub head_index: NodePtr,
     pub nodes: Vec<CircuitNode>,
     pub links: Vec<CircuitLink>
 }
 
 impl Circuit {
-    fn get_links(&self, index: NodeIndex) -> Vec<LinkIndex> {
-        self.nodes
-        .get(index)
-        .map(|x| x.links.to_vec() )
-        .unwrap_or_default()
-    }
 
-    fn add_node(&mut self, node: CircuitNode) -> usize {
+    fn add_node(&mut self, node: CircuitNode) -> NodePtr {
         let index = self.nodes.len();
         self.nodes.push(node);
         index
     }
 
-    fn get_node(&self, path: impl Into<CircuitPath>) -> usize {
-        todo!()
+    fn get_node_ptr(&self, path: impl Into<CircuitPath>) -> NodePtr {
+        let path: CircuitPath = path.into();
+        let mut current_ptr: NodePtr = self.head_index;
+        let mut node = self.nodes.get(current_ptr).unwrap();
+
+        while path.eq(node) {
+
+            let nodes = self.links.iter()
+                .filter(|x| x.from == current_ptr)
+                .map(|x| {
+                    let to_node = x.to;
+                    let n = self.nodes.get(to_node).unwrap();
+                    (to_node, n)
+                })
+                .filter(|(_i, x)| path.eq(*x))
+                .collect::<Vec<(usize, &CircuitNode)>>();
+
+            match nodes.first() {
+                Some((i, n)) => {
+                    current_ptr = *i;
+                    node = *n;
+                },
+                None => {
+                    break;
+                },
+            }
+
+        };
+
+        current_ptr
     }
 
-    fn add_link(&self, link: CircuitLink) {
-        todo!()
+    pub fn get_node(&self, path: impl Into<CircuitPath>) -> &CircuitNode {
+        let ptr: NodePtr = self.get_node_ptr(path);
+        self.nodes.get(ptr).unwrap()
+    }
+
+    fn add_rule(&mut self, rule: &ReboundRule) {
+        let node = CircuitNode::from(rule.clone());
+        let path = node.path.clone().unwrap();
+        
+        let from = self.get_node_ptr(path);
+        let to = self.add_node(node);
+        self.links.push( CircuitLink{ from, to });
     }
 }
 
@@ -92,7 +124,8 @@ impl CircuitBuilder {
 
     pub fn build(&mut self) -> Circuit {
                     
-        let mut circuit = Circuit {  
+        let mut circuit = Circuit {
+            head_index: 0,
             nodes: Vec::new(),
             links: Vec::new()
         };
@@ -101,15 +134,7 @@ impl CircuitBuilder {
 
         self.rules
             .iter()
-            .for_each(|x| {
-                let node = CircuitNode::from(x.clone());
-
-                let path = node.path.clone().unwrap();
-                let to = circuit.add_node(node);
-                let from = circuit.get_node(path);
-                circuit.add_link(CircuitLink{ from, to })
-            });
-
+            .for_each(|x| { circuit.add_rule(x); });
 
         circuit
     }
@@ -118,13 +143,67 @@ impl CircuitBuilder {
 
 #[derive(Clone, Debug)]
 pub struct CircuitPath {
-    pub str_path: String,
     pub ordered_path: Vec<String>
+}
+
+impl CircuitPath {
+
+    pub fn join(&self, other: &CircuitPath) -> CircuitPath {
+        let mut new_path = self.ordered_path.to_vec();
+        new_path.append(&mut other.ordered_path.to_vec());
+        CircuitPath { ordered_path: new_path }
+    }
+}
+
+impl CircuitPath {
+    pub fn get_diff(&self, other: &CircuitPath) -> Self {
+
+        let mut new_path = self.ordered_path.to_vec();
+        let common_zip: Vec<_> = new_path.iter().zip(other.ordered_path.iter()).collect();
+
+        let mut common_len = 0;
+        for (left, right) in common_zip {
+            if left == right {
+                common_len += 1;
+            }
+            else {
+                break;
+            }
+        }
+        
+        new_path.drain(0..common_len);
+        CircuitPath { ordered_path: new_path }
+
+    }
+}
+
+impl Into<String> for CircuitPath {
+    fn into(self) -> String {
+        self.ordered_path.join("/")
+    }
 }
 
 impl PartialEq for CircuitPath {
     fn eq(&self, other: &Self) -> bool {
-        self.str_path == other.str_path && self.ordered_path == other.ordered_path
+        if self.ordered_path.len() > other.ordered_path.len() {
+            return false;
+        }
+
+        self.ordered_path.iter()
+            .zip(other.ordered_path.iter())
+            .all(|(left, right)| left == right)
+    }
+}
+
+impl PartialEq<CircuitNode> for CircuitPath {
+    fn eq(&self, other: &CircuitNode) -> bool {
+
+        let ctype = &other.circuit_type;
+        match ctype {
+            CircuitType::Routable => return self.eq(&other.path.clone().unwrap()),
+            CircuitType::Error => true,
+        }
+        
     }
 }
 
@@ -133,12 +212,12 @@ impl From<String> for CircuitPath {
 
         let str_path = path.clone();
         let ordered_path: Vec<String> = str_path
+                            .trim_matches('/')
                             .split('/')
                             .map(|x| String::from(x))
                             .collect();
 
         CircuitPath { 
-            str_path,
             ordered_path
          }
     }

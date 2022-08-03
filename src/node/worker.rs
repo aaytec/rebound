@@ -5,6 +5,7 @@ use log::{error, info};
 use tiny_http::{Request, Response};
 
 use crate::conf::ReboundConf;
+use crate::engine::circuit::Circuit;
 use crate::engine::client::ReboundClient;
 use crate::engine::ReboundEngine;
 
@@ -31,11 +32,11 @@ pub struct WorkerNode {
 ///
 ///
 impl WorkerNode {
-    pub fn from(wid: String, c: ReboundConf, receiver: Receiver<Request>) -> Self {
+    pub fn from(wid: String, _conf: ReboundConf, circuit: Circuit, receiver: Receiver<Request>) -> Self {
         WorkerNode {
             id: wid,
             request_queue_rx: receiver,
-            engine: ReboundEngine::new(c.rules.unwrap_or_else(|| Vec::new())),
+            engine: ReboundEngine::new(circuit),
             client: ReboundClient::new(),
         }
     }

@@ -38,9 +38,13 @@ fn main() {
     let conf = conf::parser::parse(conf_file);
     info!("conf: {:?}", conf);
     
-    info!("getting default error page");
+    info!("building circuit...");
+    let circuit = circuit::CircuitBuilder
+        ::new(conf.rules.clone().unwrap_or_default())
+        .build();
 
-    MasterNode::from(&conf)
+
+    MasterNode::from(conf, circuit)
     .unwrap()
     .run();
 }

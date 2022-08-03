@@ -67,11 +67,6 @@ pub struct ReboundRule {
     /// 
     pub pattern: String,
 
-    /// preserve URI path
-    /// defaults = true
-    #[serde(default = "preserve_path_default")]
-    pub preserve_path: bool,
-
     /// preserve Http Headers
     /// defaults = true
     #[serde(default = "preserve_hdrs_default")]
@@ -98,6 +93,5 @@ pub struct ReboundRule {
 
 }
 
-fn preserve_path_default() -> bool {true}
 fn preserve_hdrs_default() -> bool {true}
 fn preserve_query_default() -> bool {true}
