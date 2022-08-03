@@ -141,6 +141,74 @@ impl CircuitBuilder {
 
 }
 
+#[derive(Clone)]
+pub enum CircuitUpstreamSchema {
+    Http,
+    Https
+}
+
+impl CircuitUpstreamSchema {
+    fn into_str(&self) -> &str {
+        match self {
+            CircuitUpstreamSchema::Http => "http://",
+            CircuitUpstreamSchema::Https => "https://",
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CircuitUpstream {
+
+    pub schema: CircuitUpstreamSchema,
+
+    pub host: String,
+
+    pub path: CircuitPath
+
+}
+
+impl From<String> for CircuitUpstream {
+    fn from(upstream: String) -> Self {
+
+        let schema = 
+        if upstream.starts_with(CircuitUpstreamSchema::Http.into_str()) {
+            CircuitUpstreamSchema::Http
+        }
+        else if upstream.starts_with(CircuitUpstreamSchema::Https.into_str()) {
+            CircuitUpstreamSchema::Https
+        }
+        else {
+            CircuitUpstreamSchema::Http
+        };
+
+        let upstream = match schema {
+            CircuitUpstreamSchema::Http => upstream.strip_prefix(CircuitUpstreamSchema::Http.into_str()),
+            CircuitUpstreamSchema::Https => upstream.strip_prefix(CircuitUpstreamSchema::Https.into_str()),
+        };
+
+        let mut cpath = CircuitPath::from(upstream.unwrap_or_default());
+        let host = cpath.ordered_path.remove(0);
+
+        CircuitUpstream { schema: schema, host: host, path: cpath }
+    }
+}
+
+impl CircuitUpstream {
+    pub fn join(&self, path: &CircuitPath) -> Self {
+
+        let mut cup = self.clone();
+        cup.path = cup.path.join(path);
+        cup
+    }
+}
+
+impl Into<String> for CircuitUpstream {
+    fn into(self) -> String {
+        let path: String = self.path.into();
+        format!("{}{}/{}", self.schema.into_str(), self.host, path)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CircuitPath {
     pub ordered_path: Vec<String>

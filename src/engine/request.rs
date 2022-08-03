@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use tiny_http::{Header, Method, Request};
 
-use super::circuit::{CircuitNode, CircuitPath, CircuitType};
+use super::circuit::{CircuitNode, CircuitPath, CircuitType, CircuitUpstream};
 
 #[derive(serde::Serialize, Clone, Debug)]
 pub enum ReboundRequestType {
@@ -64,10 +64,11 @@ impl ReboundRequest {
                 }
                 
                 let upstream = cnode.rule.as_ref().unwrap().upstream.clone();
-                let upstream_path = CircuitPath::from(upstream.as_str());
+                let ends_with_dir = upstream.ends_with('/');
+                let upstream_path = CircuitUpstream::from(upstream);
                 let req_path = CircuitPath::from(new_req.uri.clone());
 
-                if upstream_path.ordered_path.len() == 1 && !upstream.ends_with('/') {
+                if upstream_path.path.ordered_path.len() == 0 && !ends_with_dir {
                     new_req.uri = upstream_path.join(&req_path).into();
                 }
                 else {
