@@ -64,17 +64,19 @@ impl ReboundRequest {
                 }
                 
                 let upstream = cnode.rule.as_ref().unwrap().upstream.clone();
-                let ends_with_dir = upstream.ends_with('/');
                 let upstream_path = CircuitUpstream::from(upstream);
                 let req_path = CircuitPath::from(new_req.uri.clone());
 
-                if upstream_path.path.ordered_path.len() == 0 && !ends_with_dir {
+                if upstream_path.path_undefined() {
                     new_req.uri = upstream_path.join(&req_path).into();
+                    log::info!("upstream_path: {:?}, req_path: {:?}", upstream_path, req_path);
                 }
                 else {
                     let cpath = cnode.path.as_ref().unwrap();
                     let diff_path = req_path.get_diff(cpath);
                     new_req.uri = upstream_path.join(&diff_path).into();
+
+                    log::info!("upstream_path: {:?}, req_path: {:?}, diff_path: {:?}", upstream_path, req_path, diff_path);
                 }
 
                 Some(new_req)

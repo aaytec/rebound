@@ -5,13 +5,13 @@ type NodePtr = usize;
 #[allow(dead_code)]
 type LinkPtr = usize;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum CircuitType {
     Routable,
     Error
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CircuitNode {
 
     pub circuit_type: CircuitType,
@@ -28,9 +28,22 @@ impl CircuitNode {
     }
 }
 
+impl PartialEq<CircuitPath> for CircuitNode {
+    fn eq(&self, other: &CircuitPath) -> bool {
+        let ctype = &self.circuit_type;
+        match ctype {
+            CircuitType::Routable => return self.path.clone().unwrap().eq(other),
+            CircuitType::Error => true,
+        }
+    }
+}
+
 impl From<ReboundRule> for CircuitNode {
     fn from(rule: ReboundRule) -> Self {
-        let pattern = rule.pattern.clone();
+        let mut pattern = rule.pattern.clone();
+        if !pattern.ends_with("/") {
+            pattern += "/";
+        }
         CircuitNode { 
             circuit_type: CircuitType::Routable,
             rule: Some(rule),
@@ -39,13 +52,13 @@ impl From<ReboundRule> for CircuitNode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CircuitLink {
     pub from: NodePtr,
     pub to: NodePtr
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Circuit {
     pub head_index: NodePtr,
     pub nodes: Vec<CircuitNode>,
@@ -65,7 +78,7 @@ impl Circuit {
         let mut current_ptr: NodePtr = self.head_index;
         let mut node = self.nodes.get(current_ptr).unwrap();
 
-        while path.eq(node) {
+        while node.eq(&path) {
 
             let nodes = self.links.iter()
                 .filter(|x| x.from == current_ptr)
@@ -74,7 +87,7 @@ impl Circuit {
                     let n = self.nodes.get(to_node).unwrap();
                     (to_node, n)
                 })
-                .filter(|(_i, x)| path.eq(*x))
+                .filter(|(_i, x)| (*x).eq(&path) )
                 .collect::<Vec<(usize, &CircuitNode)>>();
 
             match nodes.first() {
@@ -141,10 +154,22 @@ impl CircuitBuilder {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum CircuitUpstreamSchema {
     Http,
     Https
+}
+
+pub fn get_circuit_schema(c_upstream: &String) -> CircuitUpstreamSchema {
+    if c_upstream.starts_with(CircuitUpstreamSchema::Http.into_str()) {
+        CircuitUpstreamSchema::Http
+    }
+    else if c_upstream.starts_with(CircuitUpstreamSchema::Https.into_str()) {
+        CircuitUpstreamSchema::Https
+    }
+    else {
+        CircuitUpstreamSchema::Http
+    }
 }
 
 impl CircuitUpstreamSchema {
@@ -156,7 +181,7 @@ impl CircuitUpstreamSchema {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CircuitUpstream {
 
     pub schema: CircuitUpstreamSchema,
@@ -170,24 +195,12 @@ pub struct CircuitUpstream {
 impl From<String> for CircuitUpstream {
     fn from(upstream: String) -> Self {
 
-        let schema = 
-        if upstream.starts_with(CircuitUpstreamSchema::Http.into_str()) {
-            CircuitUpstreamSchema::Http
-        }
-        else if upstream.starts_with(CircuitUpstreamSchema::Https.into_str()) {
-            CircuitUpstreamSchema::Https
-        }
-        else {
-            CircuitUpstreamSchema::Http
-        };
+        let schema = get_circuit_schema(&upstream);
+        let path_upstream = upstream.strip_prefix(schema.into_str());
+        let mut cpath = CircuitPath::from(path_upstream.unwrap());
 
-        let upstream = match schema {
-            CircuitUpstreamSchema::Http => upstream.strip_prefix(CircuitUpstreamSchema::Http.into_str()),
-            CircuitUpstreamSchema::Https => upstream.strip_prefix(CircuitUpstreamSchema::Https.into_str()),
-        };
-
-        let mut cpath = CircuitPath::from(upstream.unwrap_or_default());
-        let host = cpath.ordered_path.remove(0);
+        // host[:port] will be first in split('/')
+        let host = cpath.ordered_path.remove(0); 
 
         CircuitUpstream { schema: schema, host: host, path: cpath }
     }
@@ -200,30 +213,42 @@ impl CircuitUpstream {
         cup.path = cup.path.join(path);
         cup
     }
+
+    pub fn path_undefined(&self) -> bool {
+        return self.path.ordered_path.is_empty()
+    }
 }
 
 impl Into<String> for CircuitUpstream {
     fn into(self) -> String {
-        let path: String = self.path.into();
-        format!("{}{}/{}", self.schema.into_str(), self.host, path)
+
+        let full_uri = match self.path.ordered_path.is_empty() {
+            true =>     format!("{}/", self.host),
+            false =>    [
+                            self.host,
+                            self.path.into()
+                        ]
+                        .join("/"),
+        };
+
+        format!("{}{}", self.schema.into_str(), full_uri)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct CircuitPath {
+    pub is_resource_dir: bool,
     pub ordered_path: Vec<String>
 }
 
 impl CircuitPath {
-
+    
     pub fn join(&self, other: &CircuitPath) -> CircuitPath {
         let mut new_path = self.ordered_path.to_vec();
         new_path.append(&mut other.ordered_path.to_vec());
-        CircuitPath { ordered_path: new_path }
+        CircuitPath { ordered_path: new_path, is_resource_dir: other.is_resource_dir }
     }
-}
 
-impl CircuitPath {
     pub fn get_diff(&self, other: &CircuitPath) -> Self {
 
         let mut new_path = self.ordered_path.to_vec();
@@ -240,13 +265,17 @@ impl CircuitPath {
         }
         
         new_path.drain(0..common_len);
-        CircuitPath { ordered_path: new_path }
+        CircuitPath { ordered_path: new_path, is_resource_dir: other.is_resource_dir }
 
     }
 }
 
 impl Into<String> for CircuitPath {
     fn into(self) -> String {
+        if self.is_resource_dir {
+            return format!("{}/", self.ordered_path.join("/"))
+        }
+
         self.ordered_path.join("/")
     }
 }
@@ -259,21 +288,11 @@ impl PartialEq for CircuitPath {
 
         self.ordered_path.iter()
             .zip(other.ordered_path.iter())
+            .filter(|(left, _)| !left.is_empty())
             .all(|(left, right)| left == right)
     }
 }
 
-impl PartialEq<CircuitNode> for CircuitPath {
-    fn eq(&self, other: &CircuitNode) -> bool {
-
-        let ctype = &other.circuit_type;
-        match ctype {
-            CircuitType::Routable => return self.eq(&other.path.clone().unwrap()),
-            CircuitType::Error => true,
-        }
-        
-    }
-}
 
 impl From<String> for CircuitPath {
     fn from(path: String) -> Self {
@@ -283,10 +302,12 @@ impl From<String> for CircuitPath {
                             .trim_matches('/')
                             .split('/')
                             .map(|x| String::from(x))
+                            .filter(|x| !x.is_empty())
                             .collect();
 
         CircuitPath { 
-            ordered_path
+            ordered_path,
+            is_resource_dir: path.ends_with('/')
          }
     }
 }

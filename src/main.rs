@@ -3,6 +3,7 @@ mod node;
 mod engine;
 
 use log::LevelFilter;
+use log::debug;
 use log::info;
 use log::error;
 use log4rs::Config;
@@ -43,6 +44,7 @@ fn main() {
         ::new(conf.rules.clone().unwrap_or_default())
         .build();
 
+    debug!("circuit: {:?}", circuit);
 
     MasterNode::from(conf, circuit)
     .unwrap()
