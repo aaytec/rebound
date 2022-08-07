@@ -2,6 +2,7 @@ use std::{collections::HashMap, io::Cursor};
 use std::str::FromStr;
 use tiny_http::{Response, Header};
 
+#[derive(Debug, Clone)]
 pub struct ReboundResponse {
     
     pub status: u16,
@@ -11,7 +12,6 @@ pub struct ReboundResponse {
     pub body: Box<Vec<u8>>
 
 }
-
 
 impl ReboundResponse {
         pub async fn from(mut res: surf::Response) -> Self {

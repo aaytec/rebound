@@ -3,7 +3,7 @@ use flume::{Sender, Receiver};
 use log::{info, error};
 use tiny_http::{Server, SslConfig, Request, Response};
 
-use crate::conf::{ReboundConf, parser::read_ssl_file, REBOUND_DEFAULT_ERROR_FILE};
+use crate::{conf::{ReboundConf, parser::read_ssl_file, REBOUND_DEFAULT_ERROR_FILE}, engine::circuit::Circuit};
 
 use super::worker::WorkerNode;
 
@@ -37,14 +37,14 @@ pub struct MasterNode {
 
 impl MasterNode {
     
-    pub fn from(conf: &ReboundConf) -> Result<Self> {
+    pub fn from(conf: ReboundConf, circuit: Circuit) -> Result<Self> {
         
         info!("starting master...");
 
         let (tx, rx) = flume::unbounded::<Request>();
         let wc = conf.workers;        
         let workers = (0..wc)
-            .map(|n| WorkerNode::from( String::from(format!("worker-{}", n+1)), conf.clone(), rx.clone()))
+            .map(|n| WorkerNode::from( String::from(format!("worker-{}", n+1)), conf.clone(), circuit.clone(), rx.clone()))
             .collect();
 
 

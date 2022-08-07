@@ -3,6 +3,7 @@ mod node;
 mod engine;
 
 use log::LevelFilter;
+use log::debug;
 use log::info;
 use log::error;
 use log4rs::Config;
@@ -17,6 +18,7 @@ use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 
 use node::master::MasterNode;
+use engine::circuit;
 
 fn main() {
 
@@ -37,9 +39,14 @@ fn main() {
     let conf = conf::parser::parse(conf_file);
     info!("conf: {:?}", conf);
     
-    info!("getting default error page");
+    info!("building circuit...");
+    let circuit = circuit::CircuitBuilder
+        ::new(conf.rules.clone().unwrap_or_default())
+        .build();
 
-    MasterNode::from(&conf)
+    debug!("circuit: {:?}", circuit);
+
+    MasterNode::from(conf, circuit)
     .unwrap()
     .run();
 }

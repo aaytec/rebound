@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use tiny_http::{Header, Method, Request};
 
-use crate::conf::ReboundRule;
+use super::circuit::{CircuitNode, CircuitPath, CircuitType, CircuitUpstream};
 
 #[derive(serde::Serialize, Clone, Debug)]
 pub enum ReboundRequestType {
@@ -39,34 +39,50 @@ pub struct ReboundRequest {
 impl ReboundRequest {
 
 
-    pub fn apply(&self, rule: &ReboundRule) -> ReboundRequest {
+    pub fn apply(&self, cnode: &CircuitNode) -> Option<ReboundRequest> {
 
-        let mut new_req = self.clone();
+        let ctype = &cnode.circuit_type;
 
-        if !rule.preserve_hdrs {
-            new_req.headers.clear();
+        match ctype {
+            CircuitType::Routable => {
+                let mut new_req = self.clone();
+
+                if !cnode.rule.as_ref().unwrap().preserve_hdrs {
+                    new_req.headers.clear();
+                }
+
+                for (k, v) in &cnode.rule.as_ref().unwrap().additional_hdrs {
+                    new_req.headers.insert(k.to_string(), v.to_string());
+                }
+
+                if !cnode.rule.as_ref().unwrap().preserve_query {
+                    new_req.query_params.clear();
+                }
+
+                for (k, v) in &cnode.rule.as_ref().unwrap().additional_query {
+                    new_req.query_params.insert(k.to_string(), v.to_string());
+                }
+                
+                let upstream = cnode.rule.as_ref().unwrap().upstream.clone();
+                let upstream_path = CircuitUpstream::from(upstream);
+                let req_path = CircuitPath::from(new_req.uri.clone());
+
+                if upstream_path.path_undefined() {
+                    new_req.uri = upstream_path.join(&req_path).into();
+                }
+                else {
+                    let cpath = cnode.path.as_ref().unwrap();
+                    let diff_path = req_path.get_diff(cpath);
+                    new_req.uri = upstream_path.join(&diff_path).into();
+                }
+
+                Some(new_req)
+            },
+            
+            CircuitType::Error => None,
         }
 
-        for (k, v) in &rule.additional_hdrs {
-            new_req.headers.insert(k.to_string(), v.to_string());
-        }
-
-        if !rule.preserve_query {
-            new_req.query_params.clear();
-        }
-
-        for (k, v) in &rule.additional_query {
-            new_req.query_params.insert(k.to_string(), v.to_string());
-        }
-
-        let path = if rule.preserve_path {
-            new_req.uri
-        } else {
-            String::default()
-        };
-
-        new_req.uri = format!("{}{}", rule.upstream, path);
-        new_req
+        
     }
 }
 
