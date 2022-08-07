@@ -40,14 +40,13 @@ impl PartialEq<CircuitPath> for CircuitNode {
 
 impl From<ReboundRule> for CircuitNode {
     fn from(rule: ReboundRule) -> Self {
-        let mut pattern = rule.pattern.clone();
-        if !pattern.ends_with("/") {
-            pattern += "/";
-        }
+        let pattern = rule.pattern.clone();
+        let mut cpath = CircuitPath::from(pattern);
+        cpath.is_resource_dir = true;
         CircuitNode { 
             circuit_type: CircuitType::Routable,
             rule: Some(rule),
-            path: Some(CircuitPath::from(pattern))
+            path: Some(cpath)
         }
     }
 }
@@ -222,14 +221,12 @@ impl CircuitUpstream {
 impl Into<String> for CircuitUpstream {
     fn into(self) -> String {
 
-        let full_uri = match self.path.ordered_path.is_empty() {
-            true =>     format!("{}/", self.host),
-            false =>    [
-                            self.host,
-                            self.path.into()
-                        ]
-                        .join("/"),
-        };
+        let full_uri = 
+        [
+            self.host,
+            self.path.into()
+        ]
+        .join("/");
 
         format!("{}{}", self.schema.into_str(), full_uri)
     }
@@ -265,18 +262,20 @@ impl CircuitPath {
         }
         
         new_path.drain(0..common_len);
-        CircuitPath { ordered_path: new_path, is_resource_dir: other.is_resource_dir }
+        CircuitPath { ordered_path: new_path, is_resource_dir: self.is_resource_dir }
 
     }
 }
 
 impl Into<String> for CircuitPath {
     fn into(self) -> String {
-        if self.is_resource_dir {
-            return format!("{}/", self.ordered_path.join("/"))
-        }
+        let needs_dir = self.is_resource_dir && !self.ordered_path.is_empty();
+        let mut ret = self.ordered_path.join("/");
+        if !ret.ends_with("/") && needs_dir {
+            ret += "/"
+        } 
 
-        self.ordered_path.join("/")
+        ret
     }
 }
 
