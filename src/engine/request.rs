@@ -69,14 +69,11 @@ impl ReboundRequest {
 
                 if upstream_path.path_undefined() {
                     new_req.uri = upstream_path.join(&req_path).into();
-                    log::info!("upstream_path: {:?}, req_path: {:?}", upstream_path, req_path);
                 }
                 else {
                     let cpath = cnode.path.as_ref().unwrap();
                     let diff_path = req_path.get_diff(cpath);
                     new_req.uri = upstream_path.join(&diff_path).into();
-
-                    log::info!("upstream_path: {:?}, req_path: {:?}, diff_path: {:?}", upstream_path, req_path, diff_path);
                 }
 
                 Some(new_req)
